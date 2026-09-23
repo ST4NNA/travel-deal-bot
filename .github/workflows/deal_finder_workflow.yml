@@ -1,0 +1,35 @@
+name: Travel Deal Finder
+
+on:
+  schedule:
+    - cron: "0 13 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  find-deals:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install discord.py requests
+
+      - name: Run deal finder
+        env:
+          TRAVELPAYOUTS_TOKEN: ${{ secrets.TRAVELPAYOUTS_TOKEN }}
+          TRAVELPAYOUTS_MARKER: ${{ secrets.TRAVELPAYOUTS_MARKER }}
+          TRAVELPAYOUTS_TRS: ${{ secrets.TRAVELPAYOUTS_TRS }}
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          CHANNEL_EUROPE: ${{ secrets.CHANNEL_EUROPE }}
+          CHANNEL_ASIA: ${{ secrets.CHANNEL_ASIA }}
+          CHANNEL_SOUTH_AMERICA: ${{ secrets.CHANNEL_SOUTH_AMERICA }}
+          CHANNEL_CARIBBEAN: ${{ secrets.CHANNEL_CARIBBEAN }}
+          CHANNEL_DEFAULT: ${{ secrets.CHANNEL_DEFAULT }}
+        run: python deal_finder.py
