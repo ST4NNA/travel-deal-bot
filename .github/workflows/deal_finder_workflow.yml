@@ -1,13 +1,21 @@
 name: Travel Deal Finder
 
+# Runs automatically every day, plus lets you trigger it manually from the
+# GitHub Actions tab (handy for testing without waiting for the schedule).
 on:
   schedule:
-    - cron: "0 13 * * *"
+    # Runs at 13:17 UTC daily (~9:17 AM Guyana time). Deliberately NOT on
+    # the exact hour — GitHub Actions gets congested at round times like
+    # 13:00, which can delay or even skip scheduled runs. An odd minute
+    # like :17 avoids that traffic.
+    - cron: "17 13 * * *"
   workflow_dispatch: {}
 
 jobs:
   find-deals:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # needed to commit posted_deals.json back to the repo
 
     steps:
       - name: Check out repo
@@ -33,3 +41,11 @@ jobs:
           CHANNEL_CARIBBEAN: ${{ secrets.CHANNEL_CARIBBEAN }}
           CHANNEL_DEFAULT: ${{ secrets.CHANNEL_DEFAULT }}
         run: python deal_finder.py
+
+      - name: Save posted-deals history
+        run: |
+          git config user.name "deal-bot"
+          git config user.email "deal-bot@users.noreply.github.com"
+          git add posted_deals.json
+          git diff --staged --quiet || git commit -m "Update posted deals history"
+          git push
