@@ -5,23 +5,29 @@ What this does, step by step:
   1. Checks flight prices from multiple world-hub origins (ORIGINS) to a
      list of destinations (DESTINATIONS) — every origin x every
      destination, checked in parallel for speed.
-  2. Compares each price to that route's typical price to get a % discount.
-  3. Any route that beats MIN_DISCOUNT_PERCENT gets rated into a tier
-     (GOOD / GREAT / INSANE) and turned into a real affiliate link.
-  4. Posts a formatted, rated deal alert for each one into the matching
-     continent's Discord channel, skipping anything already posted
-     recently (see REPOST_COOLDOWN_DAYS).
+  2. Compares each price to that destination's typical price to get a %
+     discount, and rates qualifying ones into a tier (GOOD/GREAT/INSANE).
+  3. Anti-spam rules decide what actually gets posted:
+       - DESTINATION_COOLDOWN_DAYS: won't repost the same destination city
+         again within this many days, regardless of exact dates.
+       - MAX_POSTS_PER_CONTINENT_PER_DAY: caps how many deals land in any
+         one continent channel per calendar day.
+       - The single best deal found today (highest discount %) becomes
+         the "Deal of the Day" and gets its own spotlight post, once per
+         day, in DEAL_OF_THE_DAY channel.
+  4. Posts whatever survives those rules to the matching continent
+     channel (and the Deal of the Day channel, if applicable).
 
 "typical_price" per destination is a rough estimate you set yourself —
 refine it over time with typical_price_research.py.
 
 HOW TO USE (local testing):
   1. pip install discord.py requests
-  2. Set the required environment variables before running (see README/workflow
-     for the full list) — either in your terminal session or a local .env
-     setup. Don't hardcode real credentials into this file.
-  3. Edit ORIGINS, DESTINATIONS, MIN_DISCOUNT_PERCENT, and DEAL_TIERS to
-     match what you want.
+  2. Set the required environment variables before running (see the GitHub
+     Actions workflow for the full list) — either in your terminal session
+     or a local .env setup. Don't hardcode real credentials into this file.
+  3. Edit ORIGINS, DESTINATIONS, MIN_DISCOUNT_PERCENT, DEAL_TIERS, and the
+     anti-spam settings below to match what you want.
   4. Run: python deal_finder.py
   5. It checks every route once, posts any deals found, then stops.
 
@@ -29,14 +35,14 @@ For automated scheduled runs, this is meant to be triggered by a GitHub
 Actions workflow that supplies these same values as encrypted Secrets.
 """
 
+import datetime
 import json
 import os
 
 import discord
 import requests
 
-POSTED_DEALS_FILE = "posted_deals.json"
-REPOST_COOLDOWN_DAYS = 7  # don't repost the same route+dates within this many days
+STATE_FILE = "bot_state.json"
 
 # ============ CONFIG ============
 # Credentials now come from environment variables (set as GitHub Secrets
@@ -61,6 +67,10 @@ CONTINENT_CHANNELS = {
 
 # Used if a route's continent isn't in CONTINENT_CHANNELS above
 DEFAULT_CHANNEL_ID = os.environ.get("CHANNEL_DEFAULT", "")
+
+# Optional spotlight channel for the single best deal of the day, across
+# every continent. Leave the env var unset/blank to disable this feature.
+DEAL_OF_THE_DAY_CHANNEL_ID = os.environ.get("CHANNEL_DEAL_OF_THE_DAY", "")
 
 # Origin hubs — major airports across different world regions. Every one
 # of these gets checked against every destination below, so adding an
@@ -133,14 +143,23 @@ DEAL_TIERS = [
     ("🔥 GOOD DEAL", 15),
 ]
 
+# ---- Anti-spam settings ----
+
+# Don't post about the same destination CITY again within this many days,
+# even if the specific dates/price are different. Prevents one chronically
+# discounted route from dominating a channel.
+DESTINATION_COOLDOWN_DAYS = 3
+
+# Max number of deals allowed into any single continent channel per
+# calendar day, even if more routes qualify.
+MAX_POSTS_PER_CONTINENT_PER_DAY = 3
+
 # ==================================================
 
 
 def get_cheap_flight(origin, destination):
     """Ask the fresher v3 Data API for the cheapest real fare on this route,
     restricted to a realistic near-term booking window (next ~90 days)."""
-    import datetime
-
     today = datetime.date.today()
     search_month = (today.replace(day=1) + datetime.timedelta(days=32)).strftime("%Y-%m")
 
@@ -184,33 +203,48 @@ def make_affiliate_link(brand_url):
     return result.get("partner_url")
 
 
-def load_posted_deals():
-    """Load the record of previously posted deals (route+dates -> last posted date)."""
-    if not os.path.exists(POSTED_DEALS_FILE):
-        return {}
-    with open(POSTED_DEALS_FILE, "r") as f:
+# ---- Persistent state (survives between runs via bot_state.json) ----
+#
+# Structure:
+# {
+#   "destination_last_posted": {"BKK": "2026-09-25", ...},
+#   "daily_post_counts": {"2026-09-25": {"Asia": 2, "Europe": 1}},
+#   "deal_of_the_day_date": "2026-09-25"
+# }
+
+def load_state():
+    if not os.path.exists(STATE_FILE):
+        return {"destination_last_posted": {}, "daily_post_counts": {}, "deal_of_the_day_date": None}
+    with open(STATE_FILE, "r") as f:
         return json.load(f)
 
 
-def save_posted_deals(posted):
-    with open(POSTED_DEALS_FILE, "w") as f:
-        json.dump(posted, f, indent=2)
+def save_state(state):
+    with open(STATE_FILE, "w") as f:
+        json.dump(state, f, indent=2)
 
 
-def deal_fingerprint(origin, destination, depart_date, return_date):
-    """A unique key for this specific route+date combination."""
-    return f"{origin}-{destination}-{depart_date}-{return_date}"
-
-
-def was_recently_posted(fingerprint, posted, cooldown_days=REPOST_COOLDOWN_DAYS):
-    import datetime
-
-    last_posted = posted.get(fingerprint)
+def destination_on_cooldown(destination, state):
+    last_posted = state["destination_last_posted"].get(destination)
     if last_posted is None:
         return False
     last_date = datetime.date.fromisoformat(last_posted)
     days_since = (datetime.date.today() - last_date).days
-    return days_since < cooldown_days
+    return days_since < DESTINATION_COOLDOWN_DAYS
+
+
+def continent_posts_today(continent, state):
+    today_str = datetime.date.today().isoformat()
+    return state["daily_post_counts"].get(today_str, {}).get(continent, 0)
+
+
+def record_post(destination, continent, state):
+    today_str = datetime.date.today().isoformat()
+    state["destination_last_posted"][destination] = today_str
+    state["daily_post_counts"].setdefault(today_str, {})
+    state["daily_post_counts"][today_str][continent] = (
+        state["daily_post_counts"][today_str].get(continent, 0) + 1
+    )
 
 
 def get_deal_tier(discount_percent):
@@ -247,11 +281,22 @@ def fetch_all_prices(routes):
     return results
 
 
-def find_deals():
-    """Check every route and return a list of deals under the threshold,
-    skipping anything posted too recently."""
-    deals = []
-    posted = load_posted_deals()
+def ddmm(iso_date):
+    _, month, day = iso_date.split("-")
+    return f"{day}{month}"
+
+
+def build_affiliate_link(origin, destination, depart_date, return_date):
+    """Non-expiring search-link format that re-searches live when clicked."""
+    code = f"{origin}{ddmm(depart_date)}{destination}{ddmm(return_date)}1"
+    brand_url = f"https://www.aviasales.com/search/{code}"
+    return make_affiliate_link(brand_url)
+
+
+def find_candidate_deals():
+    """Check every route and return ALL deals that clear the discount bar,
+    with no anti-spam filtering applied yet — that happens in select_deals."""
+    candidates = []
 
     print(f"Checking {len(ROUTES)} routes (in parallel, this may take a minute)...")
     price_results = fetch_all_prices(ROUTES)
@@ -265,60 +310,75 @@ def find_deals():
 
         price = flight["price"]
         discount_percent = round((typical_price - price) / typical_price * 100)
-
         tier = get_deal_tier(discount_percent)
 
-        if tier is not None:
-            print(f"{origin} -> {destination} ({name}, {continent}): ${price} "
-                  f"(typical ~${typical_price}, {discount_percent}% off) -> {tier}")
+        if tier is None:
+            continue
 
-            depart_date = flight.get("departure_at", "")[:10]
-            return_date = flight.get("return_at", "")[:10]
+        depart_date = flight.get("departure_at", "")[:10]
+        return_date = flight.get("return_at", "")[:10]
 
-            fingerprint = deal_fingerprint(origin, destination, depart_date, return_date)
-            if was_recently_posted(fingerprint, posted):
-                print("  Already posted recently — skipping")
-                continue
+        candidates.append(
+            {
+                "name": name,
+                "continent": continent,
+                "flag": flag,
+                "origin": origin,
+                "destination": destination,
+                "price": price,
+                "typical_price": typical_price,
+                "discount_percent": discount_percent,
+                "tier": tier,
+                "departure_at": depart_date,
+                "return_at": return_date,
+            }
+        )
+        print(f"{origin} -> {destination} ({name}, {continent}): ${price} "
+              f"(typical ~${typical_price}, {discount_percent}% off) -> {tier}")
 
-            # v3/prices_for_dates gives fresh (48hr) price data, but its own
-            # "link" field expires too fast to use for a posted deal — the
-            # simple date-code format below re-searches live when clicked,
-            # so it never goes stale.
-            def ddmm(iso_date):
-                _, month, day = iso_date.split("-")
-                return f"{day}{month}"
-
-            code = f"{origin}{ddmm(depart_date)}{destination}{ddmm(return_date)}1"
-            brand_url = f"https://www.aviasales.com/search/{code}"
-            affiliate_link = make_affiliate_link(brand_url)
-
-            deals.append(
-                {
-                    "name": name,
-                    "continent": continent,
-                    "flag": flag,
-                    "origin": origin,
-                    "destination": destination,
-                    "price": price,
-                    "typical_price": typical_price,
-                    "discount_percent": discount_percent,
-                    "tier": tier,
-                    "departure_at": depart_date,
-                    "return_at": return_date,
-                    "fingerprint": fingerprint,
-                    "link": affiliate_link,
-                }
-            )
-            print(f"  -> {tier}")
-
-    return deals
+    return candidates
 
 
-def format_deal_message(deal):
+def select_deals(candidates, state):
+    """Apply anti-spam rules to decide what actually gets posted:
+    - best overall candidate becomes Deal of the Day (once per calendar day)
+    - remaining candidates go through destination cooldown + per-continent
+      daily cap before being allowed into their continent channel
+    Returns (deal_of_the_day_or_None, list_of_continent_deals)
+    """
+    # Best first, so the strongest deals get priority for both DOTD and
+    # the per-continent caps.
+    candidates_sorted = sorted(candidates, key=lambda d: d["discount_percent"], reverse=True)
+
+    today_str = datetime.date.today().isoformat()
+    deal_of_the_day = None
+
+    if DEAL_OF_THE_DAY_CHANNEL_ID and state.get("deal_of_the_day_date") != today_str and candidates_sorted:
+        deal_of_the_day = candidates_sorted[0]
+
+    continent_deals = []
+    for deal in candidates_sorted:
+        # Don't double-post the exact same deal as both DOTD and a regular post
+        if deal_of_the_day is not None and deal is deal_of_the_day:
+            continue
+
+        if destination_on_cooldown(deal["destination"], state):
+            continue
+
+        if continent_posts_today(deal["continent"], state) >= MAX_POSTS_PER_CONTINENT_PER_DAY:
+            continue
+
+        continent_deals.append(deal)
+
+    return deal_of_the_day, continent_deals
+
+
+def format_deal_message(deal, is_deal_of_the_day=False):
     """Turn one deal into a rated alert with tier, discount %, and a
     disclaimer that the price was live at scan time."""
+    header = "🏆 DEAL OF THE DAY 🏆\n\n" if is_deal_of_the_day else ""
     return (
-        f"{deal['tier']}\n\n"
+        f"{header}{deal['tier']}\n\n"
         f"{deal['origin']} → {deal['flag']} {deal['name']} ({deal['continent']})\n"
         f"✈️ Round trip: ${deal['price']} "
         f"(~{deal['discount_percent']}% below typical ${deal['typical_price']})\n"
@@ -328,39 +388,53 @@ def format_deal_message(deal):
     )
 
 
-async def post_deals_to_discord(deals):
+async def post_deals_to_discord(deal_of_the_day, continent_deals, state):
     intents = discord.Intents.default()
     client = discord.Client(intents=intents)
 
     @client.event
     async def on_ready():
-        if not deals:
-            print("No deals cleared the bar today — nothing posted.")
-        else:
-            import datetime
+        if deal_of_the_day is None and not continent_deals:
+            print("No deals cleared the anti-spam rules today — nothing posted.")
+            await client.close()
+            return
 
-            posted = load_posted_deals()
-            posted_count = 0
+        posted_count = 0
+        today_str = datetime.date.today().isoformat()
 
-            for deal in deals:
-                channel_id = CONTINENT_CHANNELS.get(deal["continent"], DEFAULT_CHANNEL_ID)
-                channel = client.get_channel(int(channel_id))
-
-                if channel is None:
-                    print(
-                        f"Could not find channel for {deal['continent']} "
-                        f"(ID: {channel_id}) — skipping this deal."
-                    )
-                    continue
-
-                await channel.send(format_deal_message(deal))
-                posted[deal["fingerprint"]] = datetime.date.today().isoformat()
-                print(f"Posted {deal['continent']} deal to #{channel.name}.")
+        if deal_of_the_day is not None:
+            channel = client.get_channel(int(DEAL_OF_THE_DAY_CHANNEL_ID))
+            if channel is None:
+                print("Could not find the Deal of the Day channel — skipping it.")
+            else:
+                deal_of_the_day["link"] = build_affiliate_link(
+                    deal_of_the_day["origin"], deal_of_the_day["destination"],
+                    deal_of_the_day["departure_at"], deal_of_the_day["return_at"],
+                )
+                await channel.send(format_deal_message(deal_of_the_day, is_deal_of_the_day=True))
+                state["deal_of_the_day_date"] = today_str
+                record_post(deal_of_the_day["destination"], deal_of_the_day["continent"], state)
+                print(f"Posted Deal of the Day: {deal_of_the_day['origin']} -> {deal_of_the_day['destination']}")
                 posted_count += 1
 
-            save_posted_deals(posted)
-            print(f"\nPosted {posted_count} of {len(deals)} deal(s) total.")
+        for deal in continent_deals:
+            channel_id = CONTINENT_CHANNELS.get(deal["continent"], DEFAULT_CHANNEL_ID)
+            channel = client.get_channel(int(channel_id))
 
+            if channel is None:
+                print(f"Could not find channel for {deal['continent']} (ID: {channel_id}) — skipping.")
+                continue
+
+            deal["link"] = build_affiliate_link(
+                deal["origin"], deal["destination"], deal["departure_at"], deal["return_at"]
+            )
+            await channel.send(format_deal_message(deal))
+            record_post(deal["destination"], deal["continent"], state)
+            print(f"Posted {deal['continent']} deal to #{channel.name}.")
+            posted_count += 1
+
+        save_state(state)
+        print(f"\nPosted {posted_count} deal(s) total.")
         await client.close()
 
     await client.start(DISCORD_BOT_TOKEN)
@@ -384,12 +458,16 @@ def main():
         return
 
     print("=== Checking routes for deals ===")
-    deals = find_deals()
+    state = load_state()
+    candidates = find_candidate_deals()
 
-    print(f"\n=== Found {len(deals)} deal(s). Posting to Discord... ===")
+    print(f"\n=== {len(candidates)} candidate(s) cleared the discount bar. Applying anti-spam rules... ===")
+    deal_of_the_day, continent_deals = select_deals(candidates, state)
+
+    print(f"=== Posting: {'1 Deal of the Day + ' if deal_of_the_day else ''}{len(continent_deals)} continent deal(s) ===")
     import asyncio
 
-    asyncio.run(post_deals_to_discord(deals))
+    asyncio.run(post_deals_to_discord(deal_of_the_day, continent_deals, state))
 
 
 if __name__ == "__main__":
