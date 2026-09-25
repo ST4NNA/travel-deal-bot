@@ -4,11 +4,9 @@ name: Travel Deal Finder
 # GitHub Actions tab (handy for testing without waiting for the schedule).
 on:
   schedule:
-    # Runs at 13:17 UTC daily (~9:17 AM Guyana time). Deliberately NOT on
-    # the exact hour — GitHub Actions gets congested at round times like
-    # 13:00, which can delay or even skip scheduled runs. An odd minute
-    # like :17 avoids that traffic.
-    - cron: "17 13 * * *"
+    # Runs every 2 hours (at :17 past, avoiding exact-hour congestion) so
+    # deals surface soon after they appear, instead of once a day.
+    - cron: "17 */2 * * *"
   workflow_dispatch: {}
 
 jobs:
