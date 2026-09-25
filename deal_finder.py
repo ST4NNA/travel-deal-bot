@@ -2,21 +2,26 @@
 Travel deal finder + Discord poster.
 
 What this does, step by step:
-  1. Checks flight prices for a list of routes you define below.
+  1. Checks flight prices from multiple world-hub origins (ORIGINS) to a
+     list of destinations (DESTINATIONS) — every origin x every
+     destination, checked in parallel for speed.
   2. Compares each price to that route's typical price to get a % discount.
   3. Any route that beats MIN_DISCOUNT_PERCENT gets rated into a tier
      (GOOD / GREAT / INSANE) and turned into a real affiliate link.
-  4. Posts a formatted, rated deal alert for each one into your Discord channel.
+  4. Posts a formatted, rated deal alert for each one into the matching
+     continent's Discord channel, skipping anything already posted
+     recently (see REPOST_COOLDOWN_DAYS).
 
-"typical_price" per route is a rough estimate you set yourself — refine it
-over time as you learn what these routes actually usually cost.
+"typical_price" per destination is a rough estimate you set yourself —
+refine it over time with typical_price_research.py.
 
 HOW TO USE (local testing):
   1. pip install discord.py requests
   2. Set the required environment variables before running (see README/workflow
      for the full list) — either in your terminal session or a local .env
      setup. Don't hardcode real credentials into this file.
-  3. Edit ROUTES, MIN_DISCOUNT_PERCENT, and DEAL_TIERS to match what you want.
+  3. Edit ORIGINS, DESTINATIONS, MIN_DISCOUNT_PERCENT, and DEAL_TIERS to
+     match what you want.
   4. Run: python deal_finder.py
   5. It checks every route once, posts any deals found, then stops.
 
@@ -57,43 +62,64 @@ CONTINENT_CHANNELS = {
 # Used if a route's continent isn't in CONTINENT_CHANNELS above
 DEFAULT_CHANNEL_ID = os.environ.get("CHANNEL_DEFAULT", "")
 
-# Routes to check: (origin, destination, city name, continent, emoji flag, typical round-trip price USD)
-# IATA city codes — find them by searching "[city] IATA code"
-#
-# "typical_price" is your own rough estimate of what a normal round trip
-# on this route usually costs — used to calculate how good a deal is.
-# Adjust these as you learn real typical prices over time.
-ROUTES = [
+# Origin hubs — major airports across different world regions. Every one
+# of these gets checked against every destination below, so adding an
+# origin here multiplies your route coverage.
+ORIGINS = [
+    "JFK",  # New York
+    "LHR",  # London
+    "DXB",  # Dubai
+    "SIN",  # Singapore
+    "GRU",  # São Paulo
+    "JNB",  # Johannesburg
+]
+
+# Destinations to check: (code, city name, continent, emoji flag, typical
+# round-trip price USD). "typical_price" is a rough estimate — refine it
+# over time with typical_price_research.py.
+DESTINATIONS = [
     # Europe
-    ("JFK", "LIS", "Lisbon", "Europe", "🇵🇹", 550),
-    ("JFK", "CDG", "Paris", "Europe", "🇫🇷", 650),
-    ("JFK", "FCO", "Rome", "Europe", "🇮🇹", 700),
-    ("JFK", "BCN", "Barcelona", "Europe", "🇪🇸", 650),
-    ("JFK", "AMS", "Amsterdam", "Europe", "🇳🇱", 600),
-    ("JFK", "LHR", "London", "Europe", "🇬🇧", 600),
+    ("LIS", "Lisbon", "Europe", "🇵🇹", 550),
+    ("CDG", "Paris", "Europe", "🇫🇷", 650),
+    ("FCO", "Rome", "Europe", "🇮🇹", 700),
+    ("BCN", "Barcelona", "Europe", "🇪🇸", 650),
+    ("AMS", "Amsterdam", "Europe", "🇳🇱", 600),
+    ("LHR", "London", "Europe", "🇬🇧", 600),
     # Asia
-    ("JFK", "NRT", "Tokyo", "Asia", "🇯🇵", 950),
-    ("JFK", "BKK", "Bangkok", "Asia", "🇹🇭", 900),
-    ("JFK", "SIN", "Singapore", "Asia", "🇸🇬", 1100),
-    ("JFK", "ICN", "Seoul", "Asia", "🇰🇷", 1000),
-    ("JFK", "DXB", "Dubai", "Asia", "🇦🇪", 900),
+    ("NRT", "Tokyo", "Asia", "🇯🇵", 950),
+    ("BKK", "Bangkok", "Asia", "🇹🇭", 900),
+    ("SIN", "Singapore", "Asia", "🇸🇬", 1100),
+    ("ICN", "Seoul", "Asia", "🇰🇷", 1000),
+    ("DXB", "Dubai", "Asia", "🇦🇪", 900),
     # South America
-    ("JFK", "GRU", "São Paulo", "South America", "🇧🇷", 700),
-    ("JFK", "EZE", "Buenos Aires", "South America", "🇦🇷", 800),
-    ("JFK", "BOG", "Bogotá", "South America", "🇨🇴", 450),
-    ("JFK", "LIM", "Lima", "South America", "🇵🇪", 550),
+    ("GRU", "São Paulo", "South America", "🇧🇷", 700),
+    ("EZE", "Buenos Aires", "South America", "🇦🇷", 800),
+    ("BOG", "Bogotá", "South America", "🇨🇴", 450),
+    ("LIM", "Lima", "South America", "🇵🇪", 550),
     # Caribbean
-    ("JFK", "BGI", "Barbados", "Caribbean", "🇧🇧", 450),
-    ("JFK", "PUJ", "Punta Cana", "Caribbean", "🇩🇴", 400),
-    ("JFK", "MBJ", "Montego Bay", "Caribbean", "🇯🇲", 400),
-    ("JFK", "NAS", "Nassau", "Caribbean", "🇧🇸", 350),
+    ("BGI", "Barbados", "Caribbean", "🇧🇧", 450),
+    ("PUJ", "Punta Cana", "Caribbean", "🇩🇴", 400),
+    ("MBJ", "Montego Bay", "Caribbean", "🇯🇲", 400),
+    ("NAS", "Nassau", "Caribbean", "🇧🇸", 350),
     # Africa — no dedicated channel yet, falls to DEFAULT_CHANNEL_ID for now
-    ("JFK", "CAI", "Cairo", "Africa", "🇪🇬", 900),
-    ("JFK", "JNB", "Johannesburg", "Africa", "🇿🇦", 1200),
-    ("JFK", "NBO", "Nairobi", "Africa", "🇰🇪", 1100),
+    ("CAI", "Cairo", "Africa", "🇪🇬", 900),
+    ("JNB", "Johannesburg", "Africa", "🇿🇦", 1200),
+    ("NBO", "Nairobi", "Africa", "🇰🇪", 1100),
     # Oceania — no dedicated channel yet, falls to DEFAULT_CHANNEL_ID for now
-    ("JFK", "SYD", "Sydney", "Oceania", "🇦🇺", 1400),
-    ("JFK", "AKL", "Auckland", "Oceania", "🇳🇿", 1500),
+    ("SYD", "Sydney", "Oceania", "🇦🇺", 1400),
+    ("AKL", "Auckland", "Oceania", "🇳🇿", 1500),
+    # North America — no dedicated channel yet, falls to DEFAULT_CHANNEL_ID for now
+    ("MIA", "Miami", "North America", "🇺🇸", 500),
+    ("YYZ", "Toronto", "North America", "🇨🇦", 500),
+]
+
+# Built automatically: every origin x every destination, skipping any pair
+# where they're the same airport. (origin, destination, name, continent, flag, typical_price)
+ROUTES = [
+    (origin, code, name, continent, flag, typical_price)
+    for origin in ORIGINS
+    for code, name, continent, flag, typical_price in DESTINATIONS
+    if origin != code
 ]
 
 # Minimum discount below typical price to count as a deal worth posting at all
@@ -196,33 +222,62 @@ def get_deal_tier(discount_percent):
     return None
 
 
+def fetch_all_prices(routes):
+    """Check every route's price concurrently instead of one at a time —
+    with 100+ routes, sequential checking would take too long."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    results = {}
+
+    def check_one(route):
+        origin, destination, name, continent, flag, typical_price = route
+        try:
+            flight = get_cheap_flight(origin, destination)
+        except requests.exceptions.RequestException as e:
+            print(f"  {origin} -> {destination}: request failed ({e})")
+            return route, None
+        return route, flight
+
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(check_one, route) for route in routes]
+        for future in as_completed(futures):
+            route, flight = future.result()
+            results[route] = flight
+
+    return results
+
+
 def find_deals():
     """Check every route and return a list of deals under the threshold,
     skipping anything posted too recently."""
     deals = []
     posted = load_posted_deals()
 
-    for origin, destination, name, continent, flag, typical_price in ROUTES:
-        print(f"Checking {origin} -> {destination} ({name}, {continent})...")
-        flight = get_cheap_flight(origin, destination)
+    print(f"Checking {len(ROUTES)} routes (in parallel, this may take a minute)...")
+    price_results = fetch_all_prices(ROUTES)
+
+    for route in ROUTES:
+        origin, destination, name, continent, flag, typical_price = route
+        flight = price_results.get(route)
 
         if flight is None:
-            print("  No cached price data for this route yet.")
             continue
 
         price = flight["price"]
         discount_percent = round((typical_price - price) / typical_price * 100)
-        print(f"  Cheapest found: ${price} (typical ~${typical_price}, {discount_percent}% off)")
 
         tier = get_deal_tier(discount_percent)
 
         if tier is not None:
+            print(f"{origin} -> {destination} ({name}, {continent}): ${price} "
+                  f"(typical ~${typical_price}, {discount_percent}% off) -> {tier}")
+
             depart_date = flight.get("departure_at", "")[:10]
             return_date = flight.get("return_at", "")[:10]
 
             fingerprint = deal_fingerprint(origin, destination, depart_date, return_date)
             if was_recently_posted(fingerprint, posted):
-                print(f"  -> {tier}, but already posted recently — skipping")
+                print("  Already posted recently — skipping")
                 continue
 
             # v3/prices_for_dates gives fresh (48hr) price data, but its own
@@ -235,7 +290,6 @@ def find_deals():
 
             code = f"{origin}{ddmm(depart_date)}{destination}{ddmm(return_date)}1"
             brand_url = f"https://www.aviasales.com/search/{code}"
-            print(f"  Raw brand URL: {brand_url}")
             affiliate_link = make_affiliate_link(brand_url)
 
             deals.append(
