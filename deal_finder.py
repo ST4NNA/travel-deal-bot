@@ -63,6 +63,9 @@ CONTINENT_CHANNELS = {
     "Asia": os.environ.get("CHANNEL_ASIA", ""),
     "South America": os.environ.get("CHANNEL_SOUTH_AMERICA", ""),
     "Caribbean": os.environ.get("CHANNEL_CARIBBEAN", ""),
+    "Africa": os.environ.get("CHANNEL_AFRICA", ""),
+    "Oceania": os.environ.get("CHANNEL_OCEANIA", ""),
+    "North America": os.environ.get("CHANNEL_NORTH_AMERICA", ""),
 }
 
 # Used if a route's continent isn't in CONTINENT_CHANNELS above
@@ -89,38 +92,38 @@ ORIGINS = [
 # over time with typical_price_research.py.
 DESTINATIONS = [
     # Europe
-    ("LIS", "Lisbon", "Europe", "🇵🇹", 550),
-    ("CDG", "Paris", "Europe", "🇫🇷", 650),
-    ("FCO", "Rome", "Europe", "🇮🇹", 700),
-    ("BCN", "Barcelona", "Europe", "🇪🇸", 650),
-    ("AMS", "Amsterdam", "Europe", "🇳🇱", 600),
-    ("LHR", "London", "Europe", "🇬🇧", 600),
+    ("LIS", "Lisbon", "Europe", "🇵🇹", 650),
+    ("CDG", "Paris", "Europe", "🇫🇷", 620),
+    ("FCO", "Rome", "Europe", "🇮🇹", 403),
+    ("BCN", "Barcelona", "Europe", "🇪🇸", 507),
+    ("AMS", "Amsterdam", "Europe", "🇳🇱", 379),
+    ("LHR", "London", "Europe", "🇬🇧", 553),
     # Asia
-    ("NRT", "Tokyo", "Asia", "🇯🇵", 950),
-    ("BKK", "Bangkok", "Asia", "🇹🇭", 900),
-    ("SIN", "Singapore", "Asia", "🇸🇬", 1100),
-    ("ICN", "Seoul", "Asia", "🇰🇷", 1000),
-    ("DXB", "Dubai", "Asia", "🇦🇪", 900),
+    ("NRT", "Tokyo", "Asia", "🇯🇵", 1043),
+    ("BKK", "Bangkok", "Asia", "🇹🇭", 607),
+    ("SIN", "Singapore", "Asia", "🇸🇬", 800),
+    ("ICN", "Seoul", "Asia", "🇰🇷", 774),
+    ("DXB", "Dubai", "Asia", "🇦🇪", 544),
     # South America
-    ("GRU", "São Paulo", "South America", "🇧🇷", 700),
-    ("EZE", "Buenos Aires", "South America", "🇦🇷", 800),
-    ("BOG", "Bogotá", "South America", "🇨🇴", 450),
-    ("LIM", "Lima", "South America", "🇵🇪", 550),
+    ("GRU", "São Paulo", "South America", "🇧🇷", 1184),
+    ("EZE", "Buenos Aires", "South America", "🇦🇷", 1365),
+    ("BOG", "Bogotá", "South America", "🇨🇴", 684),
+    ("LIM", "Lima", "South America", "🇵🇪", 800),
     # Caribbean
-    ("BGI", "Barbados", "Caribbean", "🇧🇧", 450),
-    ("PUJ", "Punta Cana", "Caribbean", "🇩🇴", 400),
-    ("MBJ", "Montego Bay", "Caribbean", "🇯🇲", 400),
-    ("NAS", "Nassau", "Caribbean", "🇧🇸", 350),
-    # Africa — no dedicated channel yet, falls to DEFAULT_CHANNEL_ID for now
-    ("CAI", "Cairo", "Africa", "🇪🇬", 900),
-    ("JNB", "Johannesburg", "Africa", "🇿🇦", 1200),
-    ("NBO", "Nairobi", "Africa", "🇰🇪", 1100),
-    # Oceania — no dedicated channel yet, falls to DEFAULT_CHANNEL_ID for now
-    ("SYD", "Sydney", "Oceania", "🇦🇺", 1400),
-    ("AKL", "Auckland", "Oceania", "🇳🇿", 1500),
-    # North America — no dedicated channel yet, falls to DEFAULT_CHANNEL_ID for now
-    ("MIA", "Miami", "North America", "🇺🇸", 500),
-    ("YYZ", "Toronto", "North America", "🇨🇦", 500),
+    ("BGI", "Barbados", "Caribbean", "🇧🇧", 1466),  # only 2 samples — low confidence, re-check later
+    ("PUJ", "Punta Cana", "Caribbean", "🇩🇴", 881),
+    ("MBJ", "Montego Bay", "Caribbean", "🇯🇲", 690),
+    ("NAS", "Nassau", "Caribbean", "🇧🇸", 557),
+    # Africa
+    ("CAI", "Cairo", "Africa", "🇪🇬", 483),
+    ("JNB", "Johannesburg", "Africa", "🇿🇦", 811),
+    ("NBO", "Nairobi", "Africa", "🇰🇪", 418),
+    # Oceania
+    ("SYD", "Sydney", "Oceania", "🇦🇺", 1212),
+    ("AKL", "Auckland", "Oceania", "🇳🇿", 1493),
+    # North America
+    ("MIA", "Miami", "North America", "🇺🇸", 607),
+    ("YYZ", "Toronto", "North America", "🇨🇦", 578),  # one sample hit $3905 (outlier) — median still used
 ]
 
 # Built automatically: every origin x every destination, skipping any pair
@@ -451,6 +454,9 @@ def main():
         "CHANNEL_ASIA": CONTINENT_CHANNELS["Asia"],
         "CHANNEL_SOUTH_AMERICA": CONTINENT_CHANNELS["South America"],
         "CHANNEL_CARIBBEAN": CONTINENT_CHANNELS["Caribbean"],
+        "CHANNEL_AFRICA": CONTINENT_CHANNELS["Africa"],
+        "CHANNEL_OCEANIA": CONTINENT_CHANNELS["Oceania"],
+        "CHANNEL_NORTH_AMERICA": CONTINENT_CHANNELS["North America"],
     }
     missing = [name for name, value in required.items() if not value]
     if missing:
