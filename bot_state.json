@@ -1,1 +1,39 @@
-{ "destination_last_posted": {}, "daily_post_counts": {}, "deal_of_the_day_date": null }
+{
+  "destination_last_posted": {
+    "BCN": "2026-09-26",
+    "EZE": "2026-09-26",
+    "CDG": "2026-09-26",
+    "LIS": "2026-09-26",
+    "PUJ": "2026-09-26",
+    "BKK": "2026-09-26",
+    "ICN": "2026-09-26",
+    "LIM": "2026-09-26",
+    "SIN": "2026-09-26",
+    "MIA": "2026-09-26",
+    "AMS": "2026-09-26",
+    "NRT": "2026-09-26",
+    "GRU": "2026-09-26",
+    "SYD": "2026-09-26",
+    "CAI": "2026-09-26",
+    "FCO": "2026-09-26",
+    "AKL": "2026-09-26",
+    "BGI": "2026-09-26",
+    "JNB": "2026-09-26",
+    "DXB": "2026-09-26",
+    "NAS": "2026-09-26",
+    "MBJ": "2026-09-26",
+    "YYZ": "2026-09-26"
+  },
+  "daily_post_counts": {
+    "2026-09-26": {
+      "Europe": 8,
+      "South America": 6,
+      "Caribbean": 5,
+      "Asia": 10,
+      "North America": 2,
+      "Oceania": 3,
+      "Africa": 2
+    }
+  },
+  "deal_of_the_day_date": "2026-09-26"
+}
