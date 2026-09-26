@@ -37,6 +37,9 @@ jobs:
           CHANNEL_ASIA: ${{ secrets.CHANNEL_ASIA }}
           CHANNEL_SOUTH_AMERICA: ${{ secrets.CHANNEL_SOUTH_AMERICA }}
           CHANNEL_CARIBBEAN: ${{ secrets.CHANNEL_CARIBBEAN }}
+          CHANNEL_AFRICA: ${{ secrets.CHANNEL_AFRICA }}
+          CHANNEL_OCEANIA: ${{ secrets.CHANNEL_OCEANIA }}
+          CHANNEL_NORTH_AMERICA: ${{ secrets.CHANNEL_NORTH_AMERICA }}
           CHANNEL_DEFAULT: ${{ secrets.CHANNEL_DEFAULT }}
           CHANNEL_DEAL_OF_THE_DAY: ${{ secrets.CHANNEL_DEAL_OF_THE_DAY }}
         run: python deal_finder.py
