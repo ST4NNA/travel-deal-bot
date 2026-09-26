@@ -42,6 +42,7 @@ jobs:
           CHANNEL_NORTH_AMERICA: ${{ secrets.CHANNEL_NORTH_AMERICA }}
           CHANNEL_DEFAULT: ${{ secrets.CHANNEL_DEFAULT }}
           CHANNEL_DEAL_OF_THE_DAY: ${{ secrets.CHANNEL_DEAL_OF_THE_DAY }}
+          HOTEL_DEBUG: ${{ secrets.HOTEL_DEBUG }}
         run: python deal_finder.py
 
       - name: Save bot state
