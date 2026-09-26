@@ -206,6 +206,50 @@ def make_affiliate_link(brand_url):
     return result.get("partner_url")
 
 
+def get_cheap_hotel(destination, check_in, check_out):
+    """Ask Hotellook's price cache for the cheapest hotel in this city for
+    these dates. NOTE: this endpoint is less well-documented than the
+    flight one — if this returns unexpected results, check HOTEL_DEBUG
+    output below and we'll adjust field names to match the real response.
+    Returns None if nothing found or the request fails."""
+    url = "https://engine.hotellook.com/api/v2/cache.json"
+    params = {
+        "location": destination,
+        "checkIn": check_in,
+        "checkOut": check_out,
+        "currency": "usd",
+        "limit": 1,
+        "token": TRAVELPAYOUTS_TOKEN,
+    }
+    try:
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+    except requests.exceptions.RequestException as e:
+        print(f"  Hotel check failed for {destination}: {e}")
+        return None
+
+    if not data:
+        return None
+
+    hotel = data[0] if isinstance(data, list) else None
+    if hotel is None:
+        return None
+
+    if os.environ.get("HOTEL_DEBUG"):
+        print(f"  [HOTEL_DEBUG] Raw response for {destination}: {hotel}")
+
+    return hotel
+
+
+def build_hotel_affiliate_link(destination, check_in, check_out):
+    brand_url = (
+        f"https://search.hotellook.com/?destination={destination}"
+        f"&checkIn={check_in}&checkOut={check_out}&adults=1"
+    )
+    return make_affiliate_link(brand_url)
+
+
 # ---- Persistent state (survives between runs via bot_state.json) ----
 #
 # Structure:
@@ -296,6 +340,31 @@ def build_affiliate_link(origin, destination, depart_date, return_date):
     return make_affiliate_link(brand_url)
 
 
+def attach_hotel_info(deal):
+    """Look up a cheap hotel for this deal's destination/dates and attach
+    it to the deal dict. Safe to call even if hotel data isn't available —
+    the deal just won't show a hotel line."""
+    hotel = get_cheap_hotel(deal["destination"], deal["departure_at"], deal["return_at"])
+    if hotel is None:
+        return deal
+
+    # Field names below are a best guess based on Hotellook's documented
+    # response shape — verify against real HOTEL_DEBUG output and adjust
+    # if the actual keys differ.
+    hotel_price = hotel.get("priceFrom") or hotel.get("price")
+    hotel_name = hotel.get("hotelName") or hotel.get("name")
+
+    if hotel_price is None:
+        return deal
+
+    deal["hotel_price"] = hotel_price
+    deal["hotel_name"] = hotel_name
+    deal["hotel_link"] = build_hotel_affiliate_link(
+        deal["destination"], deal["departure_at"], deal["return_at"]
+    )
+    return deal
+
+
 def find_candidate_deals():
     """Check every route and return ALL deals that clear the discount bar,
     with no anti-spam filtering applied yet — that happens in select_deals."""
@@ -378,16 +447,27 @@ def select_deals(candidates, state):
 
 def format_deal_message(deal, is_deal_of_the_day=False):
     """Turn one deal into a rated alert with tier, discount %, and a
-    disclaimer that the price was live at scan time."""
+    disclaimer that the price was live at scan time. Includes a hotel
+    line if hotel data was attached (see attach_hotel_info)."""
     header = "🏆 DEAL OF THE DAY 🏆\n\n" if is_deal_of_the_day else ""
+
+    hotel_line = ""
+    if deal.get("hotel_price") is not None:
+        name_part = f" ({deal['hotel_name']})" if deal.get("hotel_name") else ""
+        hotel_line = (
+            f"🏨 Hotel from ${deal['hotel_price']}/night{name_part}\n"
+            f"[CHECK HOTEL]({deal['hotel_link']})\n"
+        )
+
     return (
         f"{header}{deal['tier']}\n\n"
         f"{deal['origin']} → {deal['flag']} {deal['name']} ({deal['continent']})\n"
         f"✈️ Round trip: ${deal['price']} "
         f"(~{deal['discount_percent']}% below typical ${deal['typical_price']})\n"
         f"📅 {deal['departure_at']} – {deal['return_at']}\n\n"
-        f"[CHECK DEAL]({deal['link']})\n"
-        f"💡 Price was live at scan time — confirm final price on site"
+        f"[CHECK FLIGHT]({deal['link']})\n"
+        f"{hotel_line}"
+        f"💡 Prices were live at scan time — confirm final price on site"
     )
 
 
@@ -414,6 +494,7 @@ async def post_deals_to_discord(deal_of_the_day, continent_deals, state):
                     deal_of_the_day["origin"], deal_of_the_day["destination"],
                     deal_of_the_day["departure_at"], deal_of_the_day["return_at"],
                 )
+                attach_hotel_info(deal_of_the_day)
                 await channel.send(format_deal_message(deal_of_the_day, is_deal_of_the_day=True))
                 state["deal_of_the_day_date"] = today_str
                 record_post(deal_of_the_day["destination"], deal_of_the_day["continent"], state)
@@ -431,6 +512,7 @@ async def post_deals_to_discord(deal_of_the_day, continent_deals, state):
             deal["link"] = build_affiliate_link(
                 deal["origin"], deal["destination"], deal["departure_at"], deal["return_at"]
             )
+            attach_hotel_info(deal)
             await channel.send(format_deal_message(deal))
             record_post(deal["destination"], deal["continent"], state)
             print(f"Posted {deal['continent']} deal to #{channel.name}.")
