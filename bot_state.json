@@ -1,6 +1,6 @@
 {
   "destination_last_posted": {
-    "BCN": "2026-09-25",
+    "BCN": "2026-09-26",
     "CDG": "2026-09-25",
     "BKK": "2026-09-25",
     "CAI": "2026-09-25",
@@ -31,7 +31,10 @@
       "Oceania": 4,
       "North America": 1,
       "Caribbean": 1
+    },
+    "2026-09-26": {
+      "Europe": 1
     }
   },
-  "deal_of_the_day_date": "2026-09-25"
+  "deal_of_the_day_date": "2026-09-26"
 }
