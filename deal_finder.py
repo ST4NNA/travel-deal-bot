@@ -235,7 +235,8 @@ def get_cheap_hotel(destination, check_in, check_out):
             continue
 
         if response.status_code == 404:
-            continue  # try the next candidate silently — this one doesn't exist
+            print(f"  Hotel check ({url}) for {destination}: 404 (trying next candidate)")
+            continue
 
         if not response.ok:
             print(f"  Hotel check ({url}) for {destination}: HTTP {response.status_code}")
@@ -244,9 +245,11 @@ def get_cheap_hotel(destination, check_in, check_out):
         try:
             data = response.json()
         except ValueError:
+            print(f"  Hotel check ({url}) for {destination}: response wasn't valid JSON")
             continue
 
         if not data:
+            print(f"  Hotel check ({url}) for {destination}: worked, but no hotels found")
             return None
 
         hotel = data[0] if isinstance(data, list) else data
@@ -255,6 +258,7 @@ def get_cheap_hotel(destination, check_in, check_out):
             print(f"  [HOTEL_DEBUG] Raw response for {destination}: {hotel}")
         return hotel
 
+    print(f"  All hotel API candidates failed for {destination} — no hotel line will be added.")
     return None
 
 
