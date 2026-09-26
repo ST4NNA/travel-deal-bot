@@ -208,11 +208,16 @@ def make_affiliate_link(brand_url):
 
 def get_cheap_hotel(destination, check_in, check_out):
     """Ask Hotellook's price cache for the cheapest hotel in this city for
-    these dates. NOTE: this endpoint is less well-documented than the
-    flight one — if this returns unexpected results, check HOTEL_DEBUG
-    output below and we'll adjust field names to match the real response.
-    Returns None if nothing found or the request fails."""
-    url = "https://engine.hotellook.com/api/v2/cache.json"
+    these dates. NOTE: the exact current endpoint for this isn't confirmed
+    (docs are unclear and the original guess 404'd) — so this tries a few
+    plausible candidates and logs which one actually works. Once we know,
+    this can be simplified to just the working one.
+    Returns None if nothing found or all candidates fail."""
+    candidate_urls = [
+        "https://engine.hotellook.com/api/v2/cache.json",
+        "https://api.travelpayouts.com/hotels/v2/cache.json",
+        "https://api.travelpayouts.com/hotellook/v2/cache.json",
+    ]
     params = {
         "location": destination,
         "checkIn": check_in,
@@ -221,25 +226,36 @@ def get_cheap_hotel(destination, check_in, check_out):
         "limit": 1,
         "token": TRAVELPAYOUTS_TOKEN,
     }
-    try:
-        response = requests.get(url, params=params, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-    except requests.exceptions.RequestException as e:
-        print(f"  Hotel check failed for {destination}: {e}")
-        return None
 
-    if not data:
-        return None
+    for url in candidate_urls:
+        try:
+            response = requests.get(url, params=params, timeout=10)
+        except requests.exceptions.RequestException as e:
+            print(f"  Hotel check ({url}) failed for {destination}: {e}")
+            continue
 
-    hotel = data[0] if isinstance(data, list) else None
-    if hotel is None:
-        return None
+        if response.status_code == 404:
+            continue  # try the next candidate silently — this one doesn't exist
 
-    if os.environ.get("HOTEL_DEBUG"):
-        print(f"  [HOTEL_DEBUG] Raw response for {destination}: {hotel}")
+        if not response.ok:
+            print(f"  Hotel check ({url}) for {destination}: HTTP {response.status_code}")
+            continue
 
-    return hotel
+        try:
+            data = response.json()
+        except ValueError:
+            continue
+
+        if not data:
+            return None
+
+        hotel = data[0] if isinstance(data, list) else data
+        print(f"  [HOTEL_WORKING_URL] {url} worked for {destination}!")
+        if os.environ.get("HOTEL_DEBUG"):
+            print(f"  [HOTEL_DEBUG] Raw response for {destination}: {hotel}")
+        return hotel
+
+    return None
 
 
 def build_hotel_affiliate_link(destination, check_in, check_out):
