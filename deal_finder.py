@@ -37,10 +37,15 @@ Actions workflow that supplies these same values as encrypted Secrets.
 
 import datetime
 import json
+import logging
 import os
 
 import discord
 import requests
+
+# Surface discord.py's own internal connection logs — helps diagnose
+# connection issues (vs just seeing "timed out" with no detail).
+logging.basicConfig(level=logging.INFO)
 
 STATE_FILE = "bot_state.json"
 
@@ -544,16 +549,19 @@ async def post_deals_to_discord(deal_of_the_day, continent_deals, state):
 
     import asyncio
 
+    print("Attempting to connect to Discord...")
     try:
-        await asyncio.wait_for(client.start(DISCORD_BOT_TOKEN), timeout=60)
+        await asyncio.wait_for(client.start(DISCORD_BOT_TOKEN), timeout=90)
     except asyncio.TimeoutError:
-        print("ERROR: Could not connect to Discord within 60 seconds — check that "
+        print("ERROR: Could not connect to Discord within 90 seconds — check that "
               "DISCORD_BOT_TOKEN is correct and complete (no missing characters "
               "or extra whitespace from copy/paste).")
         await client.close()
     except discord.LoginFailure as e:
         print(f"ERROR: Discord rejected the bot token — {e}. "
               "Double check DISCORD_BOT_TOKEN was updated correctly in GitHub Secrets.")
+    except Exception as e:
+        print(f"ERROR: Unexpected error connecting to Discord: {type(e).__name__}: {e}")
 
 
 def main():
