@@ -542,7 +542,18 @@ async def post_deals_to_discord(deal_of_the_day, continent_deals, state):
         print(f"\nPosted {posted_count} deal(s) total.")
         await client.close()
 
-    await client.start(DISCORD_BOT_TOKEN)
+    import asyncio
+
+    try:
+        await asyncio.wait_for(client.start(DISCORD_BOT_TOKEN), timeout=60)
+    except asyncio.TimeoutError:
+        print("ERROR: Could not connect to Discord within 60 seconds — check that "
+              "DISCORD_BOT_TOKEN is correct and complete (no missing characters "
+              "or extra whitespace from copy/paste).")
+        await client.close()
+    except discord.LoginFailure as e:
+        print(f"ERROR: Discord rejected the bot token — {e}. "
+              "Double check DISCORD_BOT_TOKEN was updated correctly in GitHub Secrets.")
 
 
 def main():
