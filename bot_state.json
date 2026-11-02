@@ -1,6 +1,6 @@
 {
   "destination_last_posted": {
-    "BCN": "2026-11-01",
+    "BCN": "2026-11-02",
     "EZE": "2026-10-31",
     "CDG": "2026-11-01",
     "LIS": "2026-11-01",
@@ -210,7 +210,10 @@
       "South America": 2,
       "Oceania": 3,
       "Africa": 2
+    },
+    "2026-11-02": {
+      "Europe": 1
     }
   },
-  "deal_of_the_day_date": "2026-11-01"
+  "deal_of_the_day_date": "2026-11-02"
 }
