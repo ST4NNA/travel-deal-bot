@@ -1,6 +1,6 @@
 {
   "destination_last_posted": {
-    "BCN": "2026-11-07",
+    "BCN": "2026-11-08",
     "EZE": "2026-11-06",
     "CDG": "2026-11-07",
     "LIS": "2026-11-07",
@@ -24,7 +24,7 @@
     "MBJ": "2026-11-07",
     "YYZ": "2026-11-05",
     "LHR": "2026-11-01",
-    "BOG": "2026-11-05",
+    "BOG": "2026-11-08",
     "NBO": "2026-10-30"
   },
   "daily_post_counts": {
@@ -247,7 +247,11 @@
       "Caribbean": 4,
       "Oceania": 5,
       "Africa": 3
+    },
+    "2026-11-08": {
+      "Europe": 1,
+      "South America": 1
     }
   },
-  "deal_of_the_day_date": "2026-11-07"
+  "deal_of_the_day_date": "2026-11-08"
 }
